@@ -1,0 +1,6 @@
+{
+  "name": "Barishal Connect",
+  "description": "বরিশাল বিভাগের সকল তথ্য ও সেবা এক অ্যাপে - Barishal Connect Super App",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Barishal Connect</string>
+    <string name="app_tagline">বরিশাল বিভাগের সকল তথ্য ও সেবা এক অ্যাপে</string>
+    <string name="search_placeholder">খুঁজুন (যেমন: হাসপাতাল, ডাক্তার, বাস...)</string>
+    <string name="home_tab">হোম</string>
+    <string name="search_tab">অনুসন্ধান</string>
+    <string name="map_tab">মানচিত্র</string>
+    <string name="notifications_tab">বার্তা</string>
+    <string name="profile_tab">প্রোফাইল</string>
+</resources>
