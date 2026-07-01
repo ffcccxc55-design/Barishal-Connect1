@@ -680,22 +680,32 @@ class BarishalViewModel(
 
     fun startDownload(context: android.content.Context, title: String, url: String, fileType: String, resolution: String, sizeBytes: Long) {
         val taskId = "dl_" + System.currentTimeMillis()
-        val cleanTitle = title.replace(" ", "_").replace("?", "").replace("/", "")
+        val cleanTitle = title.replace(" ", "_").replace("?", "").replace("/", "").replace(":", "")
         val extension = if (fileType == "Music") "mp3" else "mp4"
         val fileName = "$cleanTitle.$extension"
-        val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-        val file = java.io.File(downloadDir, fileName)
         
+        val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        var tempFile = java.io.File(downloadDir, fileName)
         try {
             if (!downloadDir.exists()) {
                 downloadDir.mkdirs()
             }
-            file.writeBytes(ByteArray(1024) { 0 }) // Write some 1KB dummy bytes physically
         } catch (e: Exception) {
             e.printStackTrace()
         }
-
+        
+        // Let's check if we can write to public downloads directory. If not, fallback to app external files dir.
+        try {
+            if (!tempFile.exists()) {
+                tempFile.createNewFile()
+            }
+        } catch (e: Exception) {
+            val fallbackDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+            tempFile = java.io.File(fallbackDir, fileName)
+        }
+        val file = tempFile
         val filePath = "Path: ${file.absolutePath}"
+        
         val task = com.example.data.model.DownloadTask(
             id = taskId,
             title = title,
@@ -709,28 +719,89 @@ class BarishalViewModel(
             speed = "0 KB/s",
             status = "DOWNLOADING"
         )
+        
         viewModelScope.launch {
             repository.insertDownload(task)
-            // Run progress updates in background coroutine to simulate downloading
-            launch {
-                var downloaded = 0L
-                val step = sizeBytes / 10
-                while (downloaded < sizeBytes) {
-                    delay(800)
-                    downloaded += step
-                    if (downloaded > sizeBytes) downloaded = sizeBytes
-                    val currentProgress = downloaded.toFloat() / sizeBytes
-                    val currentSpeed = "${(150..950).random()} KB/s"
-                    val isDone = downloaded >= sizeBytes
-                    repository.updateDownloadProgress(
-                        id = taskId,
-                        progress = currentProgress,
-                        downloadedBytes = downloaded,
-                        speed = currentSpeed,
-                        status = if (isDone) "COMPLETED" else "DOWNLOADING"
-                    )
+            
+            // Perform real network download in IO thread
+            launch(kotlinx.coroutines.Dispatchers.IO) {
+                var conn: java.net.HttpURLConnection? = null
+                var inputStream: java.io.InputStream? = null
+                var outputStream: java.io.FileOutputStream? = null
+                
+                try {
+                    var currentUrlStr = url
+                    var connection = java.net.URL(currentUrlStr).openConnection() as java.net.HttpURLConnection
+                    connection.connectTimeout = 15000
+                    connection.readTimeout = 20000
+                    connection.instanceFollowRedirects = true
+                    connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     
-                    if (isDone) {
+                    var responseCode = connection.responseCode
+                    var redirectCount = 0
+                    while ((responseCode == java.net.HttpURLConnection.HTTP_MOVED_TEMP || 
+                            responseCode == java.net.HttpURLConnection.HTTP_MOVED_PERM || 
+                            responseCode == 307 || responseCode == 308) && redirectCount < 5) {
+                        val newUrl = connection.getHeaderField("Location") ?: break
+                        currentUrlStr = newUrl
+                        connection = java.net.URL(currentUrlStr).openConnection() as java.net.HttpURLConnection
+                        connection.connectTimeout = 15000
+                        connection.readTimeout = 20000
+                        connection.instanceFollowRedirects = true
+                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                        responseCode = connection.responseCode
+                        redirectCount++
+                    }
+                    
+                    if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                        conn = connection
+                        val actualLength = connection.contentLength.toLong()
+                        val totalBytesToDownload = if (actualLength > 0) actualLength else sizeBytes
+                        
+                        inputStream = connection.inputStream
+                        outputStream = java.io.FileOutputStream(file)
+                        
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        var downloaded = 0L
+                        var lastUpdateTime = System.currentTimeMillis()
+                        var bytesSinceLastUpdate = 0L
+                        
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            outputStream.write(buffer, 0, bytesRead)
+                            downloaded += bytesRead
+                            bytesSinceLastUpdate += bytesRead
+                            
+                            val currentTime = System.currentTimeMillis()
+                            val timeDiff = currentTime - lastUpdateTime
+                            
+                            if (timeDiff >= 400 || downloaded == totalBytesToDownload) {
+                                val currentProgress = downloaded.toFloat() / totalBytesToDownload
+                                val speedKbps = if (timeDiff > 0) (bytesSinceLastUpdate / 1024f) / (timeDiff / 1000f) else 100f
+                                val speedStr = String.format("%.1f KB/s", speedKbps)
+                                
+                                repository.updateDownloadProgress(
+                                    id = taskId,
+                                    progress = currentProgress,
+                                    downloadedBytes = downloaded,
+                                    speed = speedStr,
+                                    status = "DOWNLOADING"
+                                )
+                                
+                                lastUpdateTime = currentTime
+                                bytesSinceLastUpdate = 0
+                            }
+                        }
+                        
+                        // Final update
+                        repository.updateDownloadProgress(
+                            id = taskId,
+                            progress = 1.0f,
+                            downloadedBytes = downloaded,
+                            speed = "0 KB/s",
+                            status = "COMPLETED"
+                        )
+                        
                         // Scan file immediately on completion to register in Gallery / Music library
                         try {
                             android.media.MediaScannerConnection.scanFile(
@@ -741,7 +812,22 @@ class BarishalViewModel(
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
+                    } else {
+                        throw java.io.IOException("Server returned HTTP $responseCode")
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    repository.updateDownloadProgress(
+                        id = taskId,
+                        progress = 0f,
+                        downloadedBytes = 0,
+                        speed = "Error: Connection failed",
+                        status = "FAILED"
+                    )
+                } finally {
+                    try { inputStream?.close() } catch (e: Exception) {}
+                    try { outputStream?.close() } catch (e: Exception) {}
+                    try { conn?.disconnect() } catch (e: Exception) {}
                 }
             }
         }

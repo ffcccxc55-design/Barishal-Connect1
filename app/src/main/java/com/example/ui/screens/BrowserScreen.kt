@@ -400,11 +400,13 @@ fun BrowserScreen(
 
                         val quickShortcuts = listOf(
                             Triple("Google", "https://www.google.com", Color(0xFF4CAF50)),
-                            Triple("DorkGPT - AI", "https://chat.openai.com", Color(0xFF3B82F6)),
-                            Triple("Free Sites", "https://www.wikipedia.org", Color(0xFF9C27B0)),
                             Triple("YouTube", "https://www.youtube.com", Color(0xFFEF4444)),
+                            Triple("টেস্ট ভিডিও 🎥", "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", Color(0xFFE91E63)),
+                            Triple("টেস্ট অডিও 🎵", "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", Color(0xFF9C27B0)),
                             Triple("Facebook", "https://www.facebook.com", Color(0xFF1877F2)),
-                            Triple("Twitter / X", "https://x.com", Color(0xFF000000))
+                            Triple("Twitter / X", "https://x.com", Color(0xFF000000)),
+                            Triple("DorkGPT - AI", "https://chat.openai.com", Color(0xFF3B82F6)),
+                            Triple("Wikipedia", "https://www.wikipedia.org", Color(0xFF607D8B))
                         )
 
                         LazyVerticalGrid(
