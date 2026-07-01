@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.DirectoryItem
 import com.example.data.model.CitizenReport
+import com.example.data.model.CustomMapNode
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlassTextField
 import com.example.ui.components.GlowButton
@@ -491,6 +492,7 @@ fun AdminPanelScreen(
         val allRoads by viewModel.allSmartRoads.collectAsState()
         val citizenReports by viewModel.citizenReports.collectAsState()
         val userActivities by viewModel.activities.collectAsState()
+        val customMapNodes by viewModel.customMapNodes.collectAsState(initial = emptyList())
 
         val pendingRoadsCount = allRoads.count { it.status == "PENDING" }
         val pendingItemsCount = allItems.count { it.status == "PENDING" }
@@ -811,6 +813,38 @@ fun AdminPanelScreen(
                                         color = TextGray,
                                         fontSize = 11.sp,
                                         lineHeight = 16.sp
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Smart Map Google Sheets Setup Guide
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = DarkNavySurfaceCard),
+                                border = BorderStroke(1.dp, GlassBorder)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Icon(imageVector = Icons.Default.Map, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                                        Text("স্মার্ট ম্যাপ গুগল স্প্রেডশীট কলাম সেটআপ গাইড", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
+                                    Text(
+                                        text = "ইউজারদের সাবমিট করা এবং আপনার অনুমোদিত ম্যাপ লোকেশন ডাটা গুগল শীটে সিঙ্ক করতে একটি 'MapNodes' নামক ট্যাব খুলুন এবং নিম্নলিখিত কলাম হেডারসমূহ ক্রমানুসারে তৈরি করুন:\n\n" +
+                                               "• name: স্থানের সংক্ষিপ্ত বাংলা নাম (যেমন: ঝালকাঠি সদর)\n" +
+                                               "• fullName: স্থানের বিস্তারিত শিরোনাম বাংলা (যেমন: ঝালকাঠি জেলা সদর)\n" +
+                                               "• category: ক্যাটাগরি - জেলা, উপজেলা অথবা থানা\n" +
+                                               "• description: স্থানটির ঐতিহাসিক বা ভৌগোলিক বিবরণ\n" +
+                                               "• roadCondition: রাস্তা বা যাতায়াতের বর্তমান অবস্থা\n" +
+                                               "• distanceFromDhaka: ঢাকা থেকে সড়কপথের মোট দূরত্ব\n" +
+                                               "• transitMedium: কি কি যানবাহনে যাওয়া সম্ভব\n" +
+                                               "• hotspots: দর্শনীয় স্থান বা আকর্ষণের তালিকাসমূহ\n" +
+                                               "• xOffsetPercent: ম্যাপের X অক্ষে পিনের পজিশন মান (০.১ থেকে ০.৯)\n" +
+                                               "• yOffsetPercent: ম্যাপের Y অক্ষে পিনের পজিশন মান (০.১ থেকে ০.৯)\n\n" +
+                                               "টিপস: এই ডাটাবেজ কলামগুলো Apps Script এর doGet/doPost মেথডে JSON অবজেক্ট প্রোপার্টি হিসেবে পার্স হয়ে সরাসরি অ্যান্ড্রয়েড অ্যাপের সাথে রিয়েল-টাইম সিঙ্ক হবে!",
+                                        color = TextWhite,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp
                                     )
                                 }
                             }
@@ -1250,6 +1284,97 @@ fun AdminPanelScreen(
                                                             },
                                                             colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
                                                             modifier = Modifier.testTag("btn_confirm_reject_post_${post.id}")
+                                                        ) {
+                                                            Text("বাতিল নিশ্চিত")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // 4. Pending Map Nodes / Locations
+                            val pendingNodes = customMapNodes.filter { !it.isApproved }
+                            Text(text = "🗺️ ম্যাপ লোকেশন দাখিল সমূহ (${pendingNodes.size})", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+
+                            if (pendingNodes.isEmpty()) {
+                                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                                    Text(text = "কোনো ম্যাপ লোকেশন অনুমোদনের জন্য পেন্ডিং নেই।", color = TextGray, fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                                }
+                            } else {
+                                pendingNodes.forEach { node ->
+                                    var showNodeRejectForm by remember { mutableStateOf(false) }
+
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().testTag("admin_pending_node_${node.id}"),
+                                        colors = CardDefaults.cardColors(containerColor = DarkNavySurfaceCard),
+                                        border = BorderStroke(1.dp, GlassBorder)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(text = node.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                                Surface(
+                                                    color = NeonCyan.copy(alpha = 0.15f),
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = node.category,
+                                                        color = NeonCyan,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Text(text = "পূর্ণ নাম: ${node.fullName}", color = TextWhite, fontSize = 11.sp)
+                                            Text(text = "বিবরণ: ${node.description}", color = TextGray, fontSize = 11.sp)
+                                            Text(text = "রাস্তার অবস্থা: ${node.roadCondition}", color = TextGray, fontSize = 11.sp)
+                                            Text(text = "ঢাকা থেকে দূরত্ব: ${node.distanceFromDhaka} | যানবাহন: ${node.transitMedium}", color = TextGray, fontSize = 11.sp)
+                                            Text(text = "দর্শনীয় স্থান: ${node.hotspots}", color = NeonTeal, fontSize = 11.sp)
+                                            Text(text = "ম্যাপ পজিশন: X=${(node.xOffsetPercent * 100).toInt()}% , Y=${(node.yOffsetPercent * 100).toInt()}%", color = TextCyan, fontSize = 10.sp)
+
+                                            if (!showNodeRejectForm) {
+                                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                    Button(
+                                                        onClick = {
+                                                            viewModel.updateCustomMapNodeStatus(node, true)
+                                                            Toast.makeText(context, "ম্যাপ লোকেশনটি অনুমোদিত হয়েছে এবং লাইভ ম্যাপে যুক্ত হয়েছে!", Toast.LENGTH_SHORT).show()
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = NeonTeal),
+                                                        modifier = Modifier.weight(1f).testTag("btn_approve_node_${node.id}")
+                                                    ) {
+                                                        Text("অনুমোদন", color = DarkNavyBackground, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Button(
+                                                        onClick = { showNodeRejectForm = true },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                                        modifier = Modifier.weight(1f).testTag("btn_trigger_reject_node_${node.id}")
+                                                    ) {
+                                                        Text("বাতিল")
+                                                    }
+                                                }
+                                            } else {
+                                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    Text(text = "আপনি কি এই ম্যাপ লোকেশনটি ডিলিট/বাতিল করতে চান?", color = Color.Red, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                        TextButton(onClick = { showNodeRejectForm = false }) { Text("ফিরে যান", color = TextGray) }
+                                                        Button(
+                                                            onClick = {
+                                                                viewModel.deleteCustomMapNode(node.id)
+                                                                showNodeRejectForm = false
+                                                                Toast.makeText(context, "ম্যাপ লোকেশনটি বাতিল করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                                                            },
+                                                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                                            modifier = Modifier.testTag("btn_confirm_reject_node_${node.id}")
                                                         ) {
                                                             Text("বাতিল নিশ্চিত")
                                                         }

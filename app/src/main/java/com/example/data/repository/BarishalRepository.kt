@@ -656,4 +656,10 @@ class BarishalRepository(private val dao: DirectoryDao) {
     suspend fun deleteDownload(id: String) = dao.deleteDownload(id)
     suspend fun updateDownloadProgress(id: String, progress: Float, downloadedBytes: Long, speed: String, status: String) =
         dao.updateDownloadProgress(id, progress, downloadedBytes, speed, status)
+
+    // Custom Map Nodes
+    val allCustomMapNodes: Flow<List<com.example.data.model.CustomMapNode>> = dao.getAllCustomMapNodes()
+    suspend fun insertCustomMapNode(node: com.example.data.model.CustomMapNode) = dao.insertCustomMapNode(node)
+    suspend fun updateCustomMapNode(node: com.example.data.model.CustomMapNode) = dao.updateCustomMapNode(node)
+    suspend fun deleteCustomMapNode(id: Int) = dao.deleteCustomMapNode(id)
 }

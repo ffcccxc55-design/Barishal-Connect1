@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -48,6 +49,7 @@ fun IptvScreen(
     var selectedCategory by remember { mutableStateOf("All") }
     var activeChannelUrl by remember { mutableStateOf<String?>(null) }
     var activeChannelName by remember { mutableStateOf<String?>(null) }
+    var isFullscreen by remember { mutableStateOf(false) }
 
     // Categories list based on channels
     val categories = remember(channels) {
@@ -70,164 +72,262 @@ fun IptvScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(DarkNavyBackground)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Header
-            Row(
+        if (isFullscreen && activeChannelUrl != null) {
+            // FULLSCREEN VIDEO PLAYER
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    .fillMaxSize()
+                    .background(Color.Black)
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = NeonCyan
-                    )
-                }
-                Column {
-                    Text(
-                        "লাইভ টিভি ও স্পোর্টস IPTV",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "সহজে উপভোগ করুন আপনার প্রিয় খেলা ও লাইভ চ্যানেল",
-                        color = TextGray,
-                        fontSize = 11.sp
-                    )
+                AndroidView(
+                    factory = { ctx ->
+                        VideoView(ctx).apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                            setBackgroundColor(android.graphics.Color.BLACK)
+                            setOnPreparedListener { mp ->
+                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                mp.isLooping = true
+                                start()
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    update = { videoView ->
+                        try {
+                            videoView.setVideoURI(Uri.parse(activeChannelUrl))
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                )
+
+                // Fullscreen Overlay controls
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent)))
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(Color.Red, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text("LIVE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Text(
+                            activeChannelName ?: "",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        IconButton(
+                            onClick = { isFullscreen = false },
+                            modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                        ) {
+                            Icon(imageVector = Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White)
+                        }
+                        IconButton(
+                            onClick = {
+                                activeChannelUrl = null
+                                activeChannelName = null
+                                isFullscreen = false
+                            },
+                            modifier = Modifier.background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                        ) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Close player", tint = Color.White)
+                        }
+                    }
                 }
             }
-
-            // Embedded Video Player Section (Shows at top if active)
-            AnimatedVisibility(
-                visible = activeChannelUrl != null,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+        } else {
+            // STANDARD WINDOW LAYOUT
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
             ) {
-                activeChannelUrl?.let { streamUrl ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.Black),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f))
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                                    .background(Color.Black)
-                            ) {
-                                AndroidView(
-                                    factory = { ctx ->
-                                        VideoView(ctx).apply {
-                                            layoutParams = ViewGroup.LayoutParams(
-                                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                                ViewGroup.LayoutParams.MATCH_PARENT
-                                            )
-                                            setOnPreparedListener { mp ->
-                                                mp.isLooping = true
-                                                start()
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxSize(),
-                                    update = { videoView ->
-                                        try {
-                                            videoView.stopPlayback()
-                                            videoView.setVideoURI(Uri.parse(streamUrl))
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
-                                    }
-                                )
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = NeonCyan
+                        )
+                    }
+                    Column {
+                        Text(
+                            "লাইভ টিভি ও স্পোর্টস IPTV",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "সহজে উপভোগ করুন আপনার প্রিয় খেলা ও লাইভ চ্যানেল",
+                            color = TextGray,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
 
-                                // Overlay indicators
+                // Embedded Video Player Section (Shows at top if active)
+                AnimatedVisibility(
+                    visible = activeChannelUrl != null,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    activeChannelUrl?.let { streamUrl ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.Black),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f))
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.TopStart)
-                                        .padding(8.dp)
-                                        .background(Color.Red, RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .background(Color.Black)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    AndroidView(
+                                        factory = { ctx ->
+                                            VideoView(ctx).apply {
+                                                layoutParams = ViewGroup.LayoutParams(
+                                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                                )
+                                                setBackgroundColor(android.graphics.Color.BLACK)
+                                                setOnPreparedListener { mp ->
+                                                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                                                    mp.isLooping = true
+                                                    start()
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxSize(),
+                                        update = { videoView ->
+                                            try {
+                                                videoView.stopPlayback()
+                                                videoView.setVideoURI(Uri.parse(streamUrl))
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                            }
+                                        }
+                                    )
+
+                                    // Overlay indicators
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(8.dp)
+                                            .background(Color.Red, RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .background(Color.White, CircleShape)
-                                        )
-                                        Text("LIVE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .background(Color.White, CircleShape)
+                                            )
+                                            Text("LIVE", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        IconButton(
+                                            onClick = { isFullscreen = true },
+                                            modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color.White)
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                activeChannelUrl = null
+                                                activeChannelName = null
+                                            },
+                                            modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Close, contentDescription = "Close player", tint = Color.White)
+                                        }
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = {
-                                        activeChannelUrl = null
-                                        activeChannelName = null
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(8.dp)
-                                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                ) {
-                                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close player", tint = Color.White)
-                                }
-                            }
-
-                            // Active Stream Name
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                                // Active Stream Name
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(imageVector = Icons.Default.LiveTv, contentDescription = "Playing", tint = NeonCyan)
-                                    Text(
-                                        activeChannelName ?: "IPTV লাইভ স্ট্রিম",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.LiveTv, contentDescription = "Playing", tint = NeonCyan)
+                                        Text(
+                                            activeChannelName ?: "IPTV লাইভ স্ট্রিম",
+                                            color = Color.White,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
 
-                                Button(
-                                    onClick = {
-                                        try {
-                                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                                setDataAndType(Uri.parse(streamUrl), "video/*")
+                                    Button(
+                                        onClick = {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                    setDataAndType(Uri.parse(streamUrl), "video/*")
+                                                }
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(streamUrl))
+                                                context.startActivity(browserIntent)
                                             }
-                                            context.startActivity(intent)
-                                        } catch (e: Exception) {
-                                            // Fallback
-                                            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(streamUrl))
-                                            context.startActivity(browserIntent)
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.1f)),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text("External Player", color = NeonCyan, fontSize = 10.sp)
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.1f)),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text("External Player", color = NeonCyan, fontSize = 10.sp)
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
             // Search Bar & Filter options
             Card(
@@ -414,4 +514,5 @@ fun IptvScreen(
             }
         }
     }
+}
 }

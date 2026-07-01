@@ -116,6 +116,7 @@ class BarishalViewModel(
     val browserBookmarks = repository.allBookmarks.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val browserHistory = repository.allHistory.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val downloadTasks = repository.allDownloads.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val customMapNodes = repository.allCustomMapNodes.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun setFeatureDisabled(featureId: String, disabled: Boolean) {
         val current = disabledFeatures.value.toMutableSet()
@@ -748,5 +749,18 @@ class BarishalViewModel(
 
     fun deleteDownload(id: String) {
         viewModelScope.launch { repository.deleteDownload(id) }
+    }
+
+    // Custom Map Nodes
+    fun addCustomMapNode(node: com.example.data.model.CustomMapNode) {
+        viewModelScope.launch { repository.insertCustomMapNode(node) }
+    }
+
+    fun updateCustomMapNodeStatus(node: com.example.data.model.CustomMapNode, isApproved: Boolean) {
+        viewModelScope.launch { repository.updateCustomMapNode(node.copy(isApproved = isApproved)) }
+    }
+
+    fun deleteCustomMapNode(id: Int) {
+        viewModelScope.launch { repository.deleteCustomMapNode(id) }
     }
 }

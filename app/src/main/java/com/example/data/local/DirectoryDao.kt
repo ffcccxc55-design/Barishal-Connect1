@@ -128,4 +128,17 @@ interface DirectoryDao {
 
     @Query("UPDATE download_tasks SET progress = :progress, downloadedBytes = :downloadedBytes, speed = :speed, status = :status WHERE id = :id")
     suspend fun updateDownloadProgress(id: String, progress: Float, downloadedBytes: Long, speed: String, status: String)
+
+    // Custom Map Nodes
+    @Query("SELECT * FROM custom_map_nodes")
+    fun getAllCustomMapNodes(): Flow<List<com.example.data.model.CustomMapNode>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCustomMapNode(node: com.example.data.model.CustomMapNode)
+
+    @Update
+    suspend fun updateCustomMapNode(node: com.example.data.model.CustomMapNode)
+
+    @Query("DELETE FROM custom_map_nodes WHERE id = :id")
+    suspend fun deleteCustomMapNode(id: Int)
 }

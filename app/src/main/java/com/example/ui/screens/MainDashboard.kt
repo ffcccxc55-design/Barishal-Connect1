@@ -511,7 +511,7 @@ fun MainDashboard(
                         viewModel = viewModel,
                         onItemClick = { item -> navController.navigate("detail/${item.id}") }
                     )
-                    2 -> MapTab()
+                    2 -> MapTab(viewModel = viewModel)
                     3 -> NotificationTab()
                     4 -> ProfileTab(
                         viewModel = viewModel,

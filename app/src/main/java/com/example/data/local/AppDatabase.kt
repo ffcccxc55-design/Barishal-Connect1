@@ -18,9 +18,10 @@ import com.example.data.model.UserActivity
         com.example.data.model.DynamicButton::class,
         com.example.data.model.BrowserBookmark::class,
         com.example.data.model.BrowserHistory::class,
-        com.example.data.model.DownloadTask::class
+        com.example.data.model.DownloadTask::class,
+        com.example.data.model.CustomMapNode::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

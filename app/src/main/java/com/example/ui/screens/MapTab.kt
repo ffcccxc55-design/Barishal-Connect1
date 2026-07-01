@@ -1,20 +1,21 @@
 package com.example.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GpsFixed
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,18 +25,52 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.CustomMapNode
 import com.example.ui.components.GlassCard
 import com.example.ui.components.GlowButton
 import com.example.ui.components.SectionHeader
 import com.example.ui.theme.*
+import com.example.ui.viewmodel.BarishalViewModel
 
 @Composable
-fun MapTab() {
-    var selectedNode by remember { mutableStateOf(MapNodes.first()) }
+fun MapTab(viewModel: BarishalViewModel) {
+    val context = LocalContext.current
+    val customNodesState by viewModel.customMapNodes.collectAsState()
+    
+    // Filter only approved custom map nodes
+    val approvedCustomNodes = remember(customNodesState) {
+        customNodesState.filter { it.isApproved }
+    }
+    
+    // Combine base static MapNodes with approved dynamic CustomMapNodes
+    val allNodes = remember(approvedCustomNodes) {
+        MapNodes + approvedCustomNodes.map { entity ->
+            MapNode(
+                id = "custom_${entity.id}",
+                name = entity.name,
+                fullName = "${entity.name} (${entity.category})",
+                description = entity.description,
+                roadCondition = entity.roadCondition,
+                distanceFromDhaka = entity.distanceFromDhaka,
+                transitMedium = entity.transitMedium,
+                hotspots = entity.hotspots,
+                xOffsetPercent = entity.xOffsetPercent,
+                yOffsetPercent = entity.yOffsetPercent
+            )
+        }
+    }
+
+    var selectedNode by remember(allNodes) { 
+        mutableStateOf(allNodes.firstOrNull() ?: MapNodes.first()) 
+    }
+    
+    var showAddLocationDialog by remember { mutableStateOf(false) }
     
     // Radar pulsing animation
     val infiniteTransition = rememberInfiniteTransition(label = "RadarPulse")
@@ -83,12 +118,28 @@ fun MapTab() {
                 )
             }
             
-            Icon(
-                imageVector = Icons.Default.GpsFixed,
-                contentDescription = "GPS Active",
-                tint = NeonCyan,
-                modifier = Modifier.testTag("gps_status_icon")
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                IconButton(
+                    onClick = { showAddLocationDialog = true },
+                    modifier = Modifier.testTag("add_location_map_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AddLocation,
+                        contentDescription = "Add Location",
+                        tint = NeonCyan
+                    )
+                }
+                
+                Icon(
+                    imageVector = Icons.Default.GpsFixed,
+                    contentDescription = "GPS Active",
+                    tint = NeonCyan,
+                    modifier = Modifier.testTag("gps_status_icon")
+                )
+            }
         }
 
         // Animated Location Radar Map Canvas
@@ -155,7 +206,7 @@ fun MapTab() {
                 }
 
                 // Interactive Buttons on the canvas matching Map nodes
-                MapNodes.forEach { node ->
+                allNodes.forEach { node ->
                     val alignmentBiasX = (node.xOffsetPercent * 2) - 1f
                     val alignmentBiasY = (node.yOffsetPercent * 2) - 1f
                     
@@ -202,7 +253,7 @@ fun MapTab() {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(MapNodes) { node ->
+            items(allNodes) { node ->
                 FilterChip(
                     selected = selectedNode.id == node.id,
                     onClick = { selectedNode = node },
@@ -303,6 +354,292 @@ fun MapTab() {
                 }
             }
         }
+    }
+
+    if (showAddLocationDialog) {
+        var name by remember { mutableStateOf("") }
+        var fullName by remember { mutableStateOf("") }
+        var category by remember { mutableStateOf("উপজেলা") } // "জেলা", "উপজেলা", "থানা"
+        var description by remember { mutableStateOf("") }
+        var roadCondition by remember { mutableStateOf("রাস্তা স্বাভাবিক") }
+        var distanceFromDhaka by remember { mutableStateOf("") }
+        var transitMedium by remember { mutableStateOf("") }
+        var hotspots by remember { mutableStateOf("") }
+        var xOffsetPercent by remember { mutableStateOf(0.5f) }
+        var yOffsetPercent by remember { mutableStateOf(0.5f) }
+
+        AlertDialog(
+            onDismissRequest = { showAddLocationDialog = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "নতুন ম্যাপ লোকেশন যুক্ত করুন",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    IconButton(onClick = { showAddLocationDialog = false }) {
+                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "আপনার দেওয়া তথ্যটি প্রথমে এডমিন প্যানেলে অনুমোদনের জন্য যাবে। অনুমোদিত হলে ম্যাপে এই স্থানে একটি নতুন পিন যুক্ত হবে।",
+                        color = TextCyan,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp
+                    )
+
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("স্থানের নাম (যেমন: বানারীপাড়া)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = GlassBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextGray
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("add_loc_name_input")
+                    )
+
+                    OutlinedTextField(
+                        value = fullName,
+                        onValueChange = { fullName = it },
+                        label = { Text("পূর্ণ নাম বা শিরোনাম (যেমন: বানারীপাড়া উপজেলা সদর)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = GlassBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextGray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Category Selector Row
+                    Text("ক্যাটাগরি নির্ধারণ করুন:", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("জেলা", "উপজেলা", "থানা").forEach { cat ->
+                            val isSelected = category == cat
+                            ElevatedButton(
+                                onClick = { category = cat },
+                                colors = ButtonDefaults.elevatedButtonColors(
+                                    containerColor = if (isSelected) NeonCyan else DarkNavySurfaceCard,
+                                    contentColor = if (isSelected) DarkNavyBackground else Color.White
+                                ),
+                                border = BorderStroke(1.dp, if (isSelected) NeonCyan else GlassBorder),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(cat, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text("স্থানের সংক্ষিপ্ত বিবরণ") },
+                        minLines = 2,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = GlassBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextGray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = roadCondition,
+                        onValueChange = { roadCondition = it },
+                        label = { Text("রাস্তার বর্তমান অবস্থা (যেমন: জ্যামমুক্ত / স্বাভাবিক)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = GlassBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextGray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = distanceFromDhaka,
+                        onValueChange = { distanceFromDhaka = it },
+                        label = { Text("ঢাকা থেকে দূরত্ব (যেমন: ২২৫ কিমি)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = GlassBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextGray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = transitMedium,
+                        onValueChange = { transitMedium = it },
+                        label = { Text("ভ্রমণ মাধ্যম (যেমন: সরাসরি এসি বাস ও লঞ্চ)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = GlassBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextGray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = hotspots,
+                        onValueChange = { hotspots = it },
+                        label = { Text("জনপ্রিয় আকর্ষণ / স্পটসমূহ (কমা দিয়ে লিখুন)") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = GlassBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = TextGray
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Placement Sliders
+                    Divider(color = GlassBorder, modifier = Modifier.padding(vertical = 4.dp))
+                    Text("ম্যাপে পিনের অবস্থান নির্ধারণ করুন:", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    
+                    Column {
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text("ডানে-বামে অবস্থান (X Axis):", color = TextGray, fontSize = 11.sp)
+                            Text("${(xOffsetPercent * 100).toInt()}%", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = xOffsetPercent,
+                            onValueChange = { xOffsetPercent = it },
+                            valueRange = 0.1f..0.9f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = NeonCyan,
+                                activeTrackColor = NeonCyan,
+                                inactiveTrackColor = GlassBorder
+                            )
+                        )
+                    }
+
+                    Column {
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                            Text("উপরে-নিচে অবস্থান (Y Axis):", color = TextGray, fontSize = 11.sp)
+                            Text("${(yOffsetPercent * 100).toInt()}%", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = yOffsetPercent,
+                            onValueChange = { yOffsetPercent = it },
+                            valueRange = 0.1f..0.9f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = NeonCyan,
+                                activeTrackColor = NeonCyan,
+                                inactiveTrackColor = GlassBorder
+                            )
+                        )
+                    }
+
+                    // Map pin visual preview Box
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(DarkNavyBackground)
+                            .border(BorderStroke(1.dp, GlassBorder)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val w = size.width
+                            val h = size.height
+                            drawRect(color = ElectricBlue.copy(alpha = 0.1f))
+                            drawCircle(
+                                color = NeonCyan.copy(alpha = 0.3f),
+                                radius = 25f,
+                                center = Offset(w * xOffsetPercent, h * yOffsetPercent)
+                            )
+                            drawCircle(
+                                color = NeonCyan,
+                                radius = 6f,
+                                center = Offset(w * xOffsetPercent, h * yOffsetPercent)
+                            )
+                        }
+                        Text(
+                            text = "পিনের অবস্থানের লাইভ প্রিভিউ",
+                            color = TextGray,
+                            fontSize = 9.sp,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (name.isBlank() || fullName.isBlank() || description.isBlank() || distanceFromDhaka.isBlank() || transitMedium.isBlank()) {
+                            Toast.makeText(context, "অনুগ্রহ করে সব তথ্য পূরণ করুন", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val newNode = CustomMapNode(
+                                name = name,
+                                fullName = fullName,
+                                category = category,
+                                description = description,
+                                roadCondition = roadCondition,
+                                distanceFromDhaka = distanceFromDhaka,
+                                transitMedium = transitMedium,
+                                hotspots = hotspots,
+                                xOffsetPercent = xOffsetPercent,
+                                yOffsetPercent = yOffsetPercent,
+                                isApproved = false
+                            )
+                            viewModel.addCustomMapNode(newNode)
+                            Toast.makeText(context, "আপনার স্থানটির তথ্য সফলভাবে সাবমিট হয়েছে। এডমিন অনুমোদনের পর ম্যাপে দৃশ্যমান হবে!", Toast.LENGTH_LONG).show()
+                            showAddLocationDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                ) {
+                    Text("আবেদন জমা দিন", color = DarkNavyBackground, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddLocationDialog = false }) {
+                    Text("বাতিল", color = TextGray)
+                }
+            },
+            containerColor = DarkNavySurface,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.testTag("add_location_map_dialog")
+        )
     }
 }
 

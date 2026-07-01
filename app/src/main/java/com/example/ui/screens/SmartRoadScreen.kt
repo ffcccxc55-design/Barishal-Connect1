@@ -1,6 +1,13 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.Context
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -734,8 +741,56 @@ fun RoadAddTrackingView(
     onPauseResume: () -> Unit,
     onFinish: () -> Unit
 ) {
+    val context = LocalContext.current
     var hasPermission by remember { mutableStateOf(false) }
     var showingPermissionRequest by remember { mutableStateOf(true) }
+    var gpsCoordinatesText by remember { mutableStateOf("জিপিএস কানেক্ট হচ্ছে...") }
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fine = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarse = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        if (fine || coarse) {
+            hasPermission = true
+        } else {
+            showingPermissionRequest = false
+        }
+    }
+
+    LaunchedEffect(hasPermission) {
+        if (hasPermission) {
+            try {
+                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                val provider = if (isGpsEnabled) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
+                
+                if (isGpsEnabled || isNetworkEnabled) {
+                    val lastKnown = locationManager.getLastKnownLocation(provider)
+                    if (lastKnown != null) {
+                        gpsCoordinatesText = String.format("Lat: %.5f, Lng: %.5f", lastKnown.latitude, lastKnown.longitude)
+                    }
+                    
+                    val listener = object : LocationListener {
+                        override fun onLocationChanged(loc: Location) {
+                            gpsCoordinatesText = String.format("Lat: %.5f, Lng: %.5f", loc.latitude, loc.longitude)
+                        }
+                        override fun onStatusChanged(p: String?, status: Int, extras: Bundle?) {}
+                        override fun onProviderEnabled(p: String) {}
+                        override fun onProviderDisabled(p: String) {}
+                    }
+                    locationManager.requestLocationUpdates(provider, 2000L, 1f, listener)
+                } else {
+                    gpsCoordinatesText = "মোবাইলের GPS বন্ধ রয়েছে!"
+                }
+            } catch (e: SecurityException) {
+                gpsCoordinatesText = "লোকেশন পারমিশন ত্রুটি!"
+            } catch (e: Exception) {
+                gpsCoordinatesText = "জিপিএস সক্রিয় করা যাচ্ছে না!"
+            }
+        }
+    }
 
     if (!hasPermission) {
         if (showingPermissionRequest) {
@@ -754,7 +809,7 @@ fun RoadAddTrackingView(
                         Icon(imageVector = Icons.Default.GpsFixed, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(56.dp))
                         Text(text = "জিপিএস লোকেশন পারমিশন", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, textAlign = TextAlign.Center)
                         Text(
-                            text = "লাইভ সড়ক ম্যাপিং মডিউল অ্যাক্সেস করতে আপনার মোবাইলের সঠিক GPS লোকেশন পারমিশন প্রয়োজন। অনুমতি প্রদান না করলে মডিউলটি কাজ করবে না।",
+                            text = " can live mapping সড়ক মডিউল অ্যাক্সেস করতে আপনার মোবাইলের সঠিক GPS লোকেশন পারমিশন প্রয়োজন। অনুমতি প্রদান না করলে মডিউলটি কাজ করবে না।",
                             color = TextWhite,
                             fontSize = 12.sp,
                             lineHeight = 18.sp,
@@ -773,7 +828,14 @@ fun RoadAddTrackingView(
                             }
 
                             Button(
-                                onClick = { hasPermission = true },
+                                onClick = {
+                                    launcher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.testTag("btn_grant_permission")
@@ -918,7 +980,8 @@ fun RoadAddTrackingView(
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(12.dp)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Surface(
                         color = DarkNavyBackground.copy(alpha = 0.85f),
@@ -930,6 +993,22 @@ fun RoadAddTrackingView(
                             Text(
                                 text = if (isTracking && !isPaused) "লাইভ ট্র্যাকিং সক্রিয়" else if (isPaused) "ট্র্যাকিং সাময়িক বিরতি" else "ট্র্যাকিং শুরু করার জন্য অপেক্ষা",
                                 color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Surface(
+                        color = DarkNavyBackground.copy(alpha = 0.85f),
+                        border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Row(modifier = Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Icon(imageVector = Icons.Default.GpsFixed, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(10.dp))
+                            Text(
+                                text = "জিপিএস অবস্থান: $gpsCoordinatesText",
+                                color = NeonCyan,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold
                             )

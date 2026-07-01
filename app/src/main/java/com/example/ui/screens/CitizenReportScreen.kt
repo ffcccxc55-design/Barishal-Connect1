@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -1054,9 +1057,29 @@ fun CreatePostDialog(
     var selectedPhotoItem by remember { mutableStateOf<GalleryMediaItem?>(null) }
     var selectedVideoItem by remember { mutableStateOf<GalleryMediaItem?>(null) }
     
-    var showPhotoPicker by remember { mutableStateOf(false) }
-    var showVideoPicker by remember { mutableStateOf(false) }
-    var showAdvancedSettings by remember { mutableStateOf(false) }
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            selectedPhotoItem = GalleryMediaItem(
+                title = "ফটো_${System.currentTimeMillis()}",
+                url = uri.toString(),
+                isVideo = false
+            )
+        }
+    }
+
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            selectedVideoItem = GalleryMediaItem(
+                title = "ভিডিও_${System.currentTimeMillis()}",
+                url = uri.toString(),
+                isVideo = true
+            )
+        }
+    }
 
     // Advanced Option States
     var pTitle by remember { mutableStateOf("") }
@@ -1068,21 +1091,7 @@ fun CreatePostDialog(
 
     val categories = listOf("Photography", "Entertainment", "Meme", "Travel", "Sports", "Education", "Health", "Business")
 
-    if (showPhotoPicker) {
-        GalleryMediaPickerDialog(
-            isVideo = false,
-            onDismiss = { showPhotoPicker = false },
-            onMediaSelected = { selectedPhotoItem = it }
-        )
-    }
-
-    if (showVideoPicker) {
-        GalleryMediaPickerDialog(
-            isVideo = true,
-            onDismiss = { showVideoPicker = false },
-            onMediaSelected = { selectedVideoItem = it }
-        )
-    }
+    var showAdvancedSettings by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1128,7 +1137,11 @@ fun CreatePostDialog(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { showPhotoPicker = true },
+                            .clickable {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
                         colors = CardDefaults.cardColors(containerColor = if (selectedPhotoItem != null) NeonCyan.copy(alpha = 0.15f) else DarkNavyBackground),
                         border = BorderStroke(1.dp, if (selectedPhotoItem != null) NeonCyan else GlassBorder)
                     ) {
@@ -1152,7 +1165,11 @@ fun CreatePostDialog(
                     Card(
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { showVideoPicker = true },
+                            .clickable {
+                                videoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                                )
+                            },
                         colors = CardDefaults.cardColors(containerColor = if (selectedVideoItem != null) NeonTeal.copy(alpha = 0.15f) else DarkNavyBackground),
                         border = BorderStroke(1.dp, if (selectedVideoItem != null) NeonTeal else GlassBorder)
                     ) {
@@ -1364,14 +1381,17 @@ fun CreateStoryDialog(
 ) {
     var captionText by remember { mutableStateOf("") }
     var selectedMedia by remember { mutableStateOf<GalleryMediaItem?>(null) }
-    var showPhotoPicker by remember { mutableStateOf(false) }
-
-    if (showPhotoPicker) {
-        GalleryMediaPickerDialog(
-            isVideo = false,
-            onDismiss = { showPhotoPicker = false },
-            onMediaSelected = { selectedMedia = it }
-        )
+    
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            selectedMedia = GalleryMediaItem(
+                title = "স্টোরি_${System.currentTimeMillis()}",
+                url = uri.toString(),
+                isVideo = false
+            )
+        }
     }
 
     AlertDialog(
@@ -1385,7 +1405,11 @@ fun CreateStoryDialog(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showPhotoPicker = true },
+                        .clickable {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
                     colors = CardDefaults.cardColors(containerColor = if (selectedMedia != null) NeonCyan.copy(alpha = 0.15f) else DarkNavyBackground),
                     border = BorderStroke(1.dp, if (selectedMedia != null) NeonCyan else GlassBorder)
                 ) {
